@@ -10,14 +10,20 @@
         <link rel=icon href=assets/icon.png>
         <meta charset="UTF-8">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.2/semantic.css">
-        <link href="https://cdn.quilljs.com/1.1.5/quill.snow.css" rel="stylesheet">
         <!--link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.css"-->
     </head>
     <body>
+        <div class="ui container">
       <div id="main"></div>
+      <div id="editorparent" style="overflow:hidden;height:0px;">
+      <textarea name="editor" id="editor" rows="10" cols="80"></textarea>
+      </div>
+        </div>
         <!--script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/leaflet.js"></script-->
         <!--script src="https://openplatform.dbc.dk/v1/dbc_openplatform.min.js"></script-->
-        <script src="https://cdn.quilljs.com/1.1.5/quill.js"></script>
+
+      <script src="//cdn.ckeditor.com/4.6.0/full/ckeditor.js"></script>
+      <script>CKEDITOR.replace('editor')</script>
         <script src="index.js"></script>
         <script>document.write('<script src="//incoming.solsort.com/log.js?' + location.protocol + '//' + location.host + location.pathname + '"></s' + 'cript>');</script>
     </body>

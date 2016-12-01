@@ -56,7 +56,7 @@
      {:output-to "index.js"
       :main solsort.blog-editor.blog-editor
       :externs ["util/externs.js"]
-      :optimizations :advanced
+      :optimizations :simple
       :pretty-print false}}
     ]}
 )
