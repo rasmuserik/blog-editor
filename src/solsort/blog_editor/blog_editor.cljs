@@ -126,8 +126,8 @@
   (show-editor!)
   [:div.ui.container
    [:div
-    [file-list] " " [:div.primary.ui.button "new"]
-    [:div {:style {:float :right :display :inline-block}}[:code (db [:repos])] " " [:div.secondary.small.ui.button {:on-click #(js/location.reload)} "Change repository"]]]])
+    [:div {:style {:float :right :display :inline-block}}[:code (db [:repos])] " " [:div.secondary.small.ui.button {:on-click #(js/location.reload)} "Change repository"]]  
+    [file-list] " " [:div.primary.ui.button "new"] ] ])
 (defn main []
   [:div
    [:div.ui.red.label "Under development, not functional yet"]
