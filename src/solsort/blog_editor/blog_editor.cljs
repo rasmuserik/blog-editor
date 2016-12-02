@@ -60,7 +60,25 @@
                   (concat
                    (<? (<list-repos-files "_drafts"))
                    (<? (<list-repos-files "_posts"))))))))
-(defn welcome []
+(defn command:delete []
+  (js/alert "not implemented yet"))
+(defn command:unpublish []
+  (js/alert "not implemented yet"))
+(defn command:publish []
+  (js/alert "not implemented yet"))
+(defn command:save []
+  (js/alert "not implemented yet"))
+(defn command:new []
+  (db! [:current]
+       {:body ""
+        :path ""
+        :sha ""
+        :header
+        {"date" (.toISOString (js/Date.))
+         "layout" "post"
+         "title" ""}})
+  (db! [:selected-file] nil))
+(defn ui:welcome []
   (hide-editor!)
   [:div.ui.container
    [:h1 "Blog Editor"]
@@ -85,7 +103,7 @@
                             js/location.origin
                             js/location.pathname)}
      "Login to GitHub"]]])
-(defn file-list []
+(defn ui:file-list []
   (into
    [:select
     {:style {:padding-left 0
@@ -104,30 +122,12 @@
        [:option {:style {:padding-left 0
                          :padding-right 0}
                  :key v :value v} (str (:date file) " \u00a0 " (:title file))]))))
-(defn repos-name []
+(defn ui:repos-name []
   [:span
    [:code (db [:repos])] " "
    [:button.secondary.small.ui.button {:on-click #(js/location.reload)}
     "Change repository"]])
-(defn command:delete []
-  (js/alert "not implemented yet"))
-(defn command:unpublish []
-  (js/alert "not implemented yet"))
-(defn command:publish []
-  (js/alert "not implemented yet"))
-(defn command:save []
-  (js/alert "not implemented yet"))
-(defn command:new []
-  (db! [:current]
-       {:body ""
-        :path ""
-        :sha ""
-        :header
-        {"date" (.toISOString (js/Date.))
-         "layout" "post"
-         "title" ""}})
-  (db! [:selected-file] nil))
-(defn command-bar []
+(defn ui:command-bar []
   [:span.ui.basic.buttons
    [:button.small.ui.button
     {:on-click command:new}
@@ -164,16 +164,16 @@
 (defn ui:app []
   (show-editor!)
   [:div
-   [repos-name]
+   [ui:repos-name]
    [:p]
-   [file-list] " "
-   [command-bar]
+   [ui:file-list] " "
+   [ui:command-bar]
    [:p]
    [ui:file-settings]])
 (defn ui:about-create []
   (hide-editor!)
   [:div
-   [repos-name]
+   [ui:repos-name]
    [:h1 "Repository does not exist."]
    [:p "Make sure you wrote the correct repository name, or choose change repository."]
    [:p "A sample repository name that you can try out is: "
@@ -181,7 +181,7 @@
 (defn ui:main []
   [:div
    (if (= -1 (.indexOf js/location.hash "muBackendLoginToken"))
-     [welcome]
+     [ui:welcome]
      (if (no-repos?)
        [ui:about-create]
        [ui:app]))])
