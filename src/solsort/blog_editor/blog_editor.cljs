@@ -15,8 +15,6 @@
    [reagent.core :as reagent :refer []]
    [clojure.string :as string :refer [replace split blank?]]
    [cljs.core.async :refer [>! <! chan put! take! timeout close! pipe]]))
-
-(db! [:repos] (or (js/localStorage.getItem "blog-editor-repos") "rasmuserik/writings"))
 (defn no-repos? [] (= "Not Found" (get (db [:repos-info]) "message")))
 (defn current-is-draft? []
   (clojure.string/starts-with? (db [:current :path] "") "_drafts"))
@@ -56,13 +54,12 @@
 (defn <update-files []
   (go
     (db!
-    [:files]
-    (map file-info
-         (filter #(re-find #"[.]html$" (get % "path"))
-                 (concat
-                  (<? (<list-repos-files "_drafts"))
-                  (<? (<list-repos-files "_posts"))
-                  ))))))
+     [:files]
+     (map file-info
+          (filter #(re-find #"[.]html$" (get % "path"))
+                  (concat
+                   (<? (<list-repos-files "_drafts"))
+                   (<? (<list-repos-files "_posts"))))))))
 (defn welcome []
   (hide-editor!)
   [:div.ui.container
@@ -89,27 +86,24 @@
                             js/location.pathname)}
      "Login to GitHub"]]])
 (defn file-list []
-   (into
-    [:select
-     {:style {:padding-left 0
-              :padding-top 7
-              :border-radius 5
-              :padding-bottom 7
-              :background :white
-              :padding-right 0}
+  (into
+   [:select
+    {:style {:padding-left 0
+             :padding-top 7
+             :border-radius 5
+             :padding-bottom 7
+             :background :white
+             :padding-right 0}
       ;:onChange #(db! [:selected-file] (cljs.reader/read-string (.-value (.-target %1))))
-      :onChange #(let [file (cljs.reader/read-string (.-value (.-target %1)))]
-                   (log 'here file)
-                   (<load-from-github file)
-                   (db! [:selected-file] file))
-      }
-     ]
-    (for [file (reverse (sort-by :date (db [:files])))]
-      (let [v (prn-str file)]
-        [:option {:style {:padding-left 0
-                          :padding-right 0}
-                  :key v :value v} (str (:date file) " \u00a0 " (:title file))]))
-    ))
+     :onChange #(let [file (cljs.reader/read-string (.-value (.-target %1)))]
+                  (log 'here file)
+                  (<load-from-github file)
+                  (db! [:selected-file] file))}]
+   (for [file (reverse (sort-by :date (db [:files])))]
+     (let [v (prn-str file)]
+       [:option {:style {:padding-left 0
+                         :padding-right 0}
+                 :key v :value v} (str (:date file) " \u00a0 " (:title file))]))))
 (defn repos-name []
   [:span
    [:code (db [:repos])] " "
@@ -132,8 +126,7 @@
         {"date" (.toISOString (js/Date.))
          "layout" "post"
          "title" ""}})
-  (db! [:selected-file] nil)
-  )
+  (db! [:selected-file] nil))
 (defn command-bar []
   [:span.ui.basic.buttons
    [:button.small.ui.button
@@ -154,13 +147,11 @@
    [:label "Filename"]
    [:div.ui.action.input
     [:input {:style {:text-align :center}
-                                  :read-only true
-                                  :value (db [:current :path])}]
+             :read-only true
+             :value (db [:current :path])}]
     [:button.primary.ui.button
      {:on-click command:save}
-     "Save"]]
-   ]
-  )
+     "Save"]]])
 (defn ui:date-title []
   [:div.fields
    [:div.field [:label "Title"] [input {:db [:current :header "title"]}]]
@@ -178,8 +169,7 @@
    [file-list] " "
    [command-bar]
    [:p]
-   [ui:file-settings]
-   ])
+   [ui:file-settings]])
 (defn ui:about-create []
   (hide-editor!)
   [:div
@@ -187,16 +177,16 @@
    [:h1 "Repository does not exist."]
    [:p "Make sure you wrote the correct repository name, or choose change repository."]
    [:p "A sample repository name that you can try out is: "
-    [:a {:on-click (fn [] (js/localStorage.setItem "blog-editor-repos" "rasmuserik/writings") (js/location.reload))} "rasmuserik/writings"]]]
-  )
+    [:a {:on-click (fn [] (js/localStorage.setItem "blog-editor-repos" "rasmuserik/writings") (js/location.reload))} "rasmuserik/writings"]]])
 (defn ui:main []
   [:div
    (if (= -1 (.indexOf js/location.hash "muBackendLoginToken"))
      [welcome]
      (if (no-repos?)
        [ui:about-create]
-      [ui:app]))])
+       [ui:app]))])
 (let [pos (.indexOf js/location.hash "muBackendLoginToken=")]
+  (db! [:repos] (or (js/localStorage.getItem "blog-editor-repos") "rasmuserik/writings"))
   (when (not= -1 pos)
     (go
       (when (not (db [:user :auth]))
@@ -218,9 +208,9 @@
       (when (empty? (db [:repos-info]))
         (db! [:repos-info] (<? (<gh (str "repos/" (db [:repos]))))))
       (when
-          (and
-           (db [:repos-info "id"])
-           (not (db [:files])))
+       (and
+        (db [:repos-info "id"])
+        (not (db [:files])))
         (<? (<update-files))
         (<? (<load-from-github (first (reverse (sort-by :date (db [:files])))))))))
   (render [ui:main]))
