@@ -15,6 +15,7 @@
    [reagent.core :as reagent :refer []]
    [clojure.string :as string :refer [replace split blank?]]
    [cljs.core.async :refer [>! <! chan put! take! timeout close! pipe]]))
+(log (db))
 (defn no-repos? [] (= "Not Found" (get (db [:repos-info]) "message")))
 (defn current-is-draft? []
   (clojure.string/starts-with? (db [:current :path] "") "_drafts"))
@@ -27,19 +28,32 @@
 (defn set-editor-content! [s] (js/CKEDITOR.instances.editor.setData s))
 (defn decode-utf8 [s] (js/decodeURIComponent (js/escape s)))
 (defn <load-from-github [file]
+  (log 'load-from-github file
+       (= "new draft .html" (get file :path)))
   (go
-    (let [o (clojure.walk/keywordize-keys
-             (<? (<gh (str "repos/" (db [:repos]) "/contents/" (:path file)))))
-          content (decode-utf8 (js/atob (:content o)))
-          [header body] (clojure.string/split content #"\n---\w*\n" 2)
-          header (into {} (map #(clojure.string/split % #":\w*" 2)
-                               (rest (clojure.string/split header "\n"))))]
-      (db! [:current]
-           {:header header
-            :body body
-            :sha (:sha o)
-            :path (:path file)})
-      (set-editor-content! body))))
+    (if (= "new draft .html" (get file :path))
+      (do
+        (db! [:current]
+             {:body ""
+              :path ""
+              :sha ""
+              :header
+              {"date" (.toISOString (js/Date.))
+               "layout" "post"
+               "title" ""}})
+        (set-editor-content! ""))
+      (let [o (clojure.walk/keywordize-keys
+               (<? (<gh (str "repos/" (db [:repos]) "/contents/" (:path file)))))
+            content (decode-utf8 (js/atob (:content o)))
+            [header body] (clojure.string/split content #"\n---\w*\n" 2)
+            header (into {} (map #(clojure.string/split % #":\w*" 2)
+                                 (rest (clojure.string/split header "\n"))))]
+        (db! [:current]
+             {:header header
+              :body body
+              :sha (:sha o)
+              :path (:path file)})
+        (set-editor-content! body)))))
 (defn file-info [o]
   {:draft (not (re-find #"^_posts" (o "path")))
    :sha (get o "sha")
@@ -58,6 +72,9 @@
      (map file-info
           (filter #(re-find #"[.]html$" (get % "path"))
                   (concat
+                   [{"sha" ""
+                     "path" "new draft .html"
+                     "name" (str (.slice (.toISOString (js/Date.)) 0 10) " (new post).html")}]
                    (<? (<list-repos-files "_drafts"))
                    (<? (<list-repos-files "_posts"))))))))
 (defn command:delete []
@@ -68,16 +85,6 @@
   (js/alert "not implemented yet"))
 (defn command:save []
   (js/alert "not implemented yet"))
-(defn command:new []
-  (db! [:current]
-       {:body ""
-        :path ""
-        :sha ""
-        :header
-        {"date" (.toISOString (js/Date.))
-         "layout" "post"
-         "title" ""}})
-  (db! [:selected-file] nil))
 (defn ui:welcome []
   (hide-editor!)
   [:div.ui.container
@@ -117,11 +124,11 @@
                   (log 'here file)
                   (<load-from-github file)
                   (db! [:selected-file] file))}]
-   (for [file (reverse (sort-by :date (db [:files])))]
+   (for [file (reverse (sort-by (fn [f] [(:draft f) (:date f)]) (db [:files])))]
      (let [v (prn-str file)]
        [:option {:style {:padding-left 0
                          :padding-right 0}
-                 :key v :value v} (str (:date file) " \u00a0 " (:title file))]))))
+                 :key v :value v} (str (if (:draft file) "\u00a0\u00a0\u00a0\u00a0" "\u2713") (:date file) " \u00a0 " (:title file))]))))
 (defn ui:repos-name []
   [:span
    [:code (db [:repos])] " "
@@ -129,9 +136,6 @@
     "Change repository"]])
 (defn ui:command-bar []
   [:span.ui.basic.buttons
-   [:button.small.ui.button
-    {:on-click command:new}
-    "new"]
    [:button.small.ui.button
     {:on-click command:delete}
     "delete"]
