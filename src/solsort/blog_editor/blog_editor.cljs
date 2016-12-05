@@ -36,18 +36,16 @@
     (let [url (str "https://api.github.com/repos/" repos "/contents/" path)
           result (log (<! (<gh-put token url nil)))
           empty (= "Not Found" (aget result "message"))
-          sha (aget result "sha")
-          ]
-            (<! (<gh-put
-                 token
-                 url
-                 (log (js/JSON.stringify
-                       (clj->js {:message (str "Commit `/" path "` via http://blog-editor.solsort.com/")
-                             :sha sha
-                             :content (js/btoa content)})))))
+          sha (aget result "sha")]
+      (<! (<gh-put
+           token
+           url
+           (log (js/JSON.stringify
+                 (clj->js {:message (str "Commit `/" path "` via http://blog-editor.solsort.com/")
+                           :sha sha
+                           :content (js/btoa content)})))))
       (go)
-      content
-)))
+      content)))
 (defn encode-utf8 [s] (js/unescape (js/encodeURIComponent s)))
 (defn decode-utf8 [s] (js/decodeURIComponent (js/escape s)))
 (defn <gh-write [path content]
@@ -129,12 +127,12 @@
   (go
     (db! [:ui :saving] true)
     (<? (<gh-write
-      (db [:current :path])
-      (str
-       "---\n"
-       (clojure.string/join (map (fn [[k v]] (str k ": " v "\n")) (db [:current :header])))
-       "---\n"
-       (get-editor-content))))
+         (db [:current :path])
+         (str
+          "---\n"
+          (clojure.string/join (map (fn [[k v]] (str k ": " v "\n")) (db [:current :header])))
+          "---\n"
+          (get-editor-content))))
     (db! [:ui :saving] false)))
 (defn ui:welcome []
   (hide-editor!)
