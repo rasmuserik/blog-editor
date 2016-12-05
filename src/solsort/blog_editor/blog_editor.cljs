@@ -15,8 +15,49 @@
    [reagent.core :as reagent :refer []]
    [clojure.string :as string :refer [replace split blank?]]
    [cljs.core.async :refer [>! <! chan put! take! timeout close! pipe]]))
-(log (db))
 (defn no-repos? [] (= "Not Found" (get (db [:repos-info]) "message")))
+
+(defn <gh-put [token url content]
+  (let [method (if content "PUT" "GET")
+        c (chan)
+        xhr (js/XMLHttpRequest.)]
+    (aset xhr "onreadystatechange"
+          (fn [a]
+            (log 'ready-state (aget xhr "readyState"))
+            (when (= 4 (aget xhr "readyState"))
+              (put!close! c (JSON.parse (aget xhr "responseText"))))))
+    (.open xhr method url)
+    (.setRequestHeader xhr "Authorization" (str "token " token))
+    (.send xhr content)
+    c))
+
+(defn <github-write [token repos path content]
+  (go
+    (let [url (str "https://api.github.com/repos/" repos "/contents/" path)
+          result (log (<! (<gh-put token url nil)))
+          empty (= "Not Found" (aget result "message"))
+          sha (aget result "sha")
+          ]
+            (<! (<gh-put
+                 token
+                 url
+                 (log (js/JSON.stringify
+                       (clj->js {:message (str "Commit `/" path "` via http://blog-editor.solsort.com/")
+                             :sha sha
+                             :content (js/btoa content)})))))
+      (go)
+      content
+)))
+(defn encode-utf8 [s] (js/unescape (js/encodeURIComponent s)))
+(defn decode-utf8 [s] (js/decodeURIComponent (js/escape s)))
+(defn <gh-write [path content]
+  (<github-write (db [:user :auth "token"]) (db [:repos]) path (encode-utf8 content)))
+
+(db [:repos])
+(go
+  (<! (timeout 100))
+  (<! (<gh-write "hello" "wørld")))
+
 (defn current-is-draft? []
   (clojure.string/starts-with? (db [:current :path] "") "_drafts"))
 (defn <gh [endpoint]
@@ -26,7 +67,7 @@
 (defn hide-editor! [] (aset js/editorparent.style "height" "0px"))
 (defn show-editor! [] (aset js/editorparent.style "height" "auto"))
 (defn set-editor-content! [s] (js/CKEDITOR.instances.editor.setData s))
-(defn decode-utf8 [s] (js/decodeURIComponent (js/escape s)))
+(defn get-editor-content [] (js/CKEDITOR.instances.editor.getData))
 (defn <load-from-github [file]
   (log 'load-from-github file
        (= "new draft .html" (get file :path)))
@@ -83,8 +124,18 @@
   (js/alert "not implemented yet"))
 (defn command:publish []
   (js/alert "not implemented yet"))
+(log (db))
 (defn command:save []
-  (js/alert "not implemented yet"))
+  (go
+    (db! [:ui :saving] true)
+    (<? (<gh-write
+      (db [:current :path])
+      (str
+       "---\n"
+       (clojure.string/join (map (fn [[k v]] (str k ": " v "\n")) (db [:current :header])))
+       "---\n"
+       (get-editor-content))))
+    (db! [:ui :saving] false)))
 (defn ui:welcome []
   (hide-editor!)
   [:div.ui.container
@@ -108,7 +159,8 @@
                            (str
                             "https://mubackend.solsort.com/auth/github?url="
                             js/location.origin
-                            js/location.pathname)}
+                            js/location.pathname
+                            "&scope=public_repo")}
      "Login to GitHub"]]])
 (defn ui:file-list []
   (into
@@ -154,7 +206,8 @@
              :read-only true
              :value (db [:current :path])}]
     [:button.primary.ui.button
-     {:on-click command:save}
+     {:class (if (db [:ui :saving]) "loading" "")
+      :on-click command:save}
      "Save"]]])
 (defn ui:date-title []
   [:div.fields
