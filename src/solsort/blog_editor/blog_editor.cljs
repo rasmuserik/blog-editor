@@ -146,12 +146,8 @@
               )))))
   (js/console.log "update-filename")
 (log (db))
-(defn command:unpublish []
-  (js/alert "not implemented yet"))
 (defn command:update-filename[]
   (update-filename))
-(defn command:publish []
-  (js/alert "not implemented yet"))
 (defn command:save []
   (go
     (db! [:ui :saving] true)
@@ -164,6 +160,21 @@
           (get-editor-content))))
     (<? (<update-files))
     (db! [:ui :saving] false)))
+(defn command:un-publish []
+  (when-not (db [:ui :publishing])
+    (go
+      (db! [:ui :publishing] true)
+      (<! (command:delete))
+      ;;   (<! (<gh-delete (db [:current :path])))
+      (let [p (db [:current :path])]
+        (db! [:current :path]
+             (if (current-is-draft?)
+               (.replace p "draft" "post")
+               (.replace p "post" "draft"))))
+      ;;   (<! (<gh-delete (db [:current :path])))
+      (<? (command:save))
+      (<? (<update-files))
+      (db! [:ui :publishing]))))
 (defn ui:welcome []
   (hide-editor!)
   [:div.ui.container
@@ -220,13 +231,13 @@
     {:class (if (db [:ui :deleting]) "loading" "")
      :on-click command:delete}
     "delete"]
-   (if (current-is-draft?)
      [:button.small.ui.button
-      {:on-click command:publish}
+       {:class (if (db [:ui :publishing]) "loading" "")
+       :on-click command:un-publish}
+      (if (current-is-draft?) "" "un" )
       "publish"]
-     [:button.small.ui.button
-      {:on-click command:unpublish}
-      "unpublish"])])
+     
+   ])
 (defn ui:filename-save []
   [:div.field
    [:label "Filename"]
