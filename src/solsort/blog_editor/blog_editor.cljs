@@ -50,7 +50,6 @@
 (defn decode-utf8 [s] (js/decodeURIComponent (js/escape s)))
 (defn <gh-write [path content]
   (<github-write (db [:user :auth "token"]) (db [:repos]) path (encode-utf8 content)))
-(canonize-string "hello wørld this å  this")
 
 (defn gh-url [path] (str "https://api.github.com/repos/" (db [:repos]) "/contents/" path))
 (defn gh-token [] (db [:user :auth "token"]))
@@ -66,7 +65,7 @@
                            :sha sha
                            }))))))))
 (defn current-is-draft? []
-  (clojure.string/starts-with? (db [:current :path] "") "_drafts"))
+  (not (clojure.string/starts-with? (db [:current :path] "") "_posts")))
 (defn <gh-get [endpoint]
   (<ajax (str "https://api.github.com/" endpoint
               "?access_token=" (db [:user :auth "token"]))
@@ -131,8 +130,26 @@
     (<! (<gh-delete (db [:current :path])))
     (<? (<update-files))
     (db! [:ui :deleting])))
+(defn update-filename []
+  (let [title (db [:current :header "title"])]
+    (log (db! [:current :path]
+             (str
+              (if (current-is-draft?)
+                "_drafts/"
+                "_posts/")
+              (canonize-string
+               (.trim (str (.slice (.trim (db [:current :header "date"])) 0 10)
+                           " "
+                           title))
+               )
+              ".html"
+              )))))
+  (js/console.log "update-filename")
+(log (db))
 (defn command:unpublish []
   (js/alert "not implemented yet"))
+(defn command:update-filename[]
+  (update-filename))
 (defn command:publish []
   (js/alert "not implemented yet"))
 (defn command:save []
@@ -225,7 +242,9 @@
   [:div.fields
    [:div.field [:label "Title"] [input {:db [:current :header "title"]}]]
    [:div.field [:label "Date"] [input {:db [:current :header "date"]}]]
-   [:div.field [:label "\u00a0"] [:button.fluid.ui.button "Update filename"]]])
+   [:div.field [:label "\u00a0"] [:button.fluid.ui.button
+                                  {:on-click command:update-filename}
+                                  "Update filename"]]])
 (defn ui:file-settings []
   [:div.ui.form
    [ui:date-title]
