@@ -10,16 +10,15 @@
    [solsort.toolbox.ui :refer [input select]]
    [solsort.util
     :refer
-    [<ajax <seq<! js-seq load-style! put!close!
+    [<ajax <seq<! js-seq load-style! put!close! canonize-string
      parse-json-or-nil log page-ready render dom->clj]]
    [reagent.core :as reagent :refer []]
    [clojure.string :as string :refer [replace split blank?]]
    [cljs.core.async :refer [>! <! chan put! take! timeout close! pipe]]))
 (defn no-repos? [] (= "Not Found" (get (db [:repos-info]) "message")))
 
-(defn <gh-put [token url content]
-  (let [method (if content "PUT" "GET")
-        c (chan)
+(defn <gh [method token url content]
+  (let [c (chan)
         xhr (js/XMLHttpRequest.)]
     (aset xhr "onreadystatechange"
           (fn [a]
@@ -30,6 +29,8 @@
     (.setRequestHeader xhr "Authorization" (str "token " token))
     (.send xhr content)
     c))
+(defn <gh-put [token url content]
+  (<gh (if content "PUT" "GET") token url content))
 
 (defn <github-write [token repos path content]
   (go
@@ -41,24 +42,32 @@
            token
            url
            (log (js/JSON.stringify
-                 (clj->js {:message (str "Commit `/" path "` via http://blog-editor.solsort.com/")
+                 (clj->js {:message (str "Save `/" path "` via http://blog-editor.solsort.com/")
                            :sha sha
                            :content (js/btoa content)})))))
-      (go)
       content)))
 (defn encode-utf8 [s] (js/unescape (js/encodeURIComponent s)))
 (defn decode-utf8 [s] (js/decodeURIComponent (js/escape s)))
 (defn <gh-write [path content]
   (<github-write (db [:user :auth "token"]) (db [:repos]) path (encode-utf8 content)))
+(canonize-string "hello wørld this å  this")
 
-(db [:repos])
-(go
-  (<! (timeout 100))
-  (<! (<gh-write "hello" "wørld")))
-
+(defn gh-url [path] (str "https://api.github.com/repos/" (db [:repos]) "/contents/" path))
+(defn gh-token [] (db [:user :auth "token"]))
+(defn <gh-delete [path]
+  (go
+    (let [token (gh-token)
+          result (log (<! (<gh "GET" token (gh-url path) nil)))
+          empty (= "Not Found" (aget result "message"))
+          sha (aget result "sha")]
+      (<! (<gh "DELETE" token (gh-url path)
+           (log (js/JSON.stringify
+                 (clj->js {:message (str "Delete `/" path "` via http://blog-editor.solsort.com/")
+                           :sha sha
+                           }))))))))
 (defn current-is-draft? []
   (clojure.string/starts-with? (db [:current :path] "") "_drafts"))
-(defn <gh [endpoint]
+(defn <gh-get [endpoint]
   (<ajax (str "https://api.github.com/" endpoint
               "?access_token=" (db [:user :auth "token"]))
          :credentials false))
@@ -82,7 +91,7 @@
                "title" ""}})
         (set-editor-content! ""))
       (let [o (clojure.walk/keywordize-keys
-               (<? (<gh (str "repos/" (db [:repos]) "/contents/" (:path file)))))
+               (<? (<gh-get (str "repos/" (db [:repos]) "/contents/" (:path file)))))
             content (decode-utf8 (js/atob (:content o)))
             [header body] (clojure.string/split content #"\n---\w*\n" 2)
             header (into {} (map #(clojure.string/split % #":\w*" 2)
@@ -102,7 +111,7 @@
 (defn <list-repos-files [path]
   (go
     (except
-     (<? (<gh (str "repos/" (db [:repos]) "/contents/" path)))
+     (<? (<gh-get (str "repos/" (db [:repos]) "/contents/" path)))
      [])))
 (defn <update-files []
   (go
@@ -117,12 +126,15 @@
                    (<? (<list-repos-files "_drafts"))
                    (<? (<list-repos-files "_posts"))))))))
 (defn command:delete []
-  (js/alert "not implemented yet"))
+  (go
+    (db! [:ui :deleting] true)
+    (<! (<gh-delete (db [:current :path])))
+    (<? (<update-files))
+    (db! [:ui :deleting])))
 (defn command:unpublish []
   (js/alert "not implemented yet"))
 (defn command:publish []
   (js/alert "not implemented yet"))
-(log (db))
 (defn command:save []
   (go
     (db! [:ui :saving] true)
@@ -133,6 +145,7 @@
           (clojure.string/join (map (fn [[k v]] (str k ": " v "\n")) (db [:current :header])))
           "---\n"
           (get-editor-content))))
+    (<? (<update-files))
     (db! [:ui :saving] false)))
 (defn ui:welcome []
   (hide-editor!)
@@ -187,7 +200,8 @@
 (defn ui:command-bar []
   [:span.ui.basic.buttons
    [:button.small.ui.button
-    {:on-click command:delete}
+    {:class (if (db [:ui :deleting]) "loading" "")
+     :on-click command:delete}
     "delete"]
    (if (current-is-draft?)
      [:button.small.ui.button
@@ -255,13 +269,13 @@
             (aset js/location "hash" "")
             (js/location.reload))))
       (when (not (db [:user :info]))
-        (db! [:user :info] (<? (<gh "user"))))
+        (db! [:user :info] (<? (<gh-get "user"))))
       (when (empty? (db [:repos]))
         (db! [:repos] (str (db [:user :info "login"]) ".github.io")))
       (when (not (re-find #"/" (db [:repos] "")))
         (db! [:repos] (str (db [:user :info "login"]) "/" (db [:repos]))))
       (when (empty? (db [:repos-info]))
-        (db! [:repos-info] (<? (<gh (str "repos/" (db [:repos]))))))
+        (db! [:repos-info] (<? (<gh-get (str "repos/" (db [:repos]))))))
       (when
        (and
         (db [:repos-info "id"])
